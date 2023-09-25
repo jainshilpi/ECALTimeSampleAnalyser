@@ -53,6 +53,9 @@
 #include "CondFormats/DataRecord/interface/EcalPFRecHitThresholdsRcd.h"
 #include "DataFormats/HepMCCandidate/interface/GenParticle.h"
 
+#include "Geometry/CaloGeometry/interface/CaloGeometry.h"
+#include "Geometry/Records/interface/CaloGeometryRecord.h"
+
 #include <TTree.h>
 #include <TLorentzVector.h>
 
@@ -83,7 +86,7 @@ class ECALTimeSampleAnalyser : public edm::one::EDAnalyzer<edm::one::SharedResou
       virtual void analyze(const edm::Event&, const edm::EventSetup&) override;
       virtual void endJob() override;
   //virtual std::vector<std::array<double, NMAXSAMPLES> > getTimeSamplesAroundEle(std::vector<DetId> v_id, edm::Handle<EBDigiCollection> pEBDigi, edm::Handle<EEDigiCollection> pEEDigi);
-  virtual std::vector<std::vector<double> > getTimeSamplesAroundEle(std::vector<DetId> v_id, edm::Handle<EBDigiCollection> pEBDigi, edm::Handle<EEDigiCollection> pEEDigi, const EcalRecHitCollection* EBRecHits, const EcalRecHitCollection* EERecHits,  const EcalPFRecHitThresholds* thresholds, std::vector<double> &hitsEnergy, std::vector<double> &hitsThr);
+  virtual std::vector<std::vector<double> > getTimeSamplesAroundEle(const CaloGeometry* geo, std::vector<DetId> v_id, edm::Handle<EBDigiCollection> pEBDigi, edm::Handle<EEDigiCollection> pEEDigi, const EcalRecHitCollection* EBRecHits, const EcalRecHitCollection* EERecHits,  const EcalPFRecHitThresholds* thresholds, std::vector<double> &hitsEnergy, std::vector<double> &hitsThr, std::vector<double> &hitsEta, std::vector<double> &hitsPhi);
 
   virtual std::vector<reco::GenParticle>::const_iterator  getGenMatch(std::vector<std::vector<reco::GenParticle>::const_iterator> genLep, reco::GsfElectron gsfele, double &dRmin);
   
@@ -94,6 +97,8 @@ class ECALTimeSampleAnalyser : public edm::one::EDAnalyzer<edm::one::SharedResou
       edm::EDGetTokenT<TrackCollection> tracksToken_;  //used to select what tracks to read from configuration file
       edm::EDGetTokenT<EBDigiCollection> ebDigiToken_;
       edm::EDGetTokenT<EEDigiCollection> eeDigiToken_;
+  edm::ESGetToken<CaloGeometry, CaloGeometryRecord> geometryToken_;
+
       const std::string ebdigiCollection_;
   //edm::EDGetTokenT<reco::PhotonCollection>         recophotonCollection_;
       edm::EDGetTokenT<reco::GsfElectronCollection>         recoelectronCollection_;
@@ -123,6 +128,9 @@ class ECALTimeSampleAnalyser : public edm::one::EDAnalyzer<edm::one::SharedResou
   std::vector<std::vector<double>> hitsAmplitudes_;
   std::vector<double> hitsEnergy_;
   std::vector<double> hitsThr_;
+  std::vector<double> hitsEta_;
+  std::vector<double> hitsPhi_;
+  
 
   edm::EDGetTokenT<std::vector<reco::GenParticle> > genParticlesCollection_;
 
@@ -141,7 +149,8 @@ class ECALTimeSampleAnalyser : public edm::one::EDAnalyzer<edm::one::SharedResou
 //
 // constructors and destructor
 //
-ECALTimeSampleAnalyser::ECALTimeSampleAnalyser(const edm::ParameterSet& iConfig)
+ECALTimeSampleAnalyser::ECALTimeSampleAnalyser(const edm::ParameterSet& iConfig):
+      geometryToken_(esConsumes())
 {
    //now do what ever initialization is needed
   ebDigiToken_ = consumes<EBDigiCollection>(iConfig.getParameter<edm::InputTag>("EBdigiCollection"));
@@ -196,6 +205,11 @@ ECALTimeSampleAnalyser::analyze(const edm::Event& iEvent, const edm::EventSetup&
    hitsAmplitudes_.clear();
    hitsEnergy_.clear();
    hitsThr_.clear();
+   hitsEta_.clear();
+   hitsPhi_.clear();
+
+  // get geometry
+  const CaloGeometry* geo = &iSetup.getData(geometryToken_);
 
    //hitsAmplitudes_.clear();
    nsamples_ = NMAXSAMPLES;
@@ -325,12 +339,16 @@ ECALTimeSampleAnalyser::analyze(const edm::Event& iEvent, const edm::EventSetup&
 
        std::vector<double> hitsEnergy;
        std::vector<double> hitsThr;
+       std::vector<double> hitsEta;
+       std::vector<double> hitsPhi;
 
-       std::vector<std::vector<double>> hitsAmplitudes = getTimeSamplesAroundEle(v_id, pEBDigi, pEEDigi, EBRecHits, EERecHits, thresholds, hitsEnergy, hitsThr);
+       std::vector<std::vector<double>> hitsAmplitudes = getTimeSamplesAroundEle(geo, v_id, pEBDigi, pEEDigi, EBRecHits, EERecHits, thresholds, hitsEnergy, hitsThr, hitsEta, hitsPhi);
        hitsAmplitudes_ = hitsAmplitudes;
        hitsEnergy_ = hitsEnergy;
        hitsThr_ = hitsThr;
        e5x5_ = theRecoEl[j].e5x5();
+       hitsEta_ = hitsEta;
+       hitsPhi_ = hitsPhi;
 
        
        gendR_ = 999;
@@ -500,6 +518,9 @@ ECALTimeSampleAnalyser::beginJob()
   treeEle->Branch("hitsAmplitudes",         &hitsAmplitudes_);
   treeEle->Branch("hitsEnergy",         &hitsEnergy_);
   treeEle->Branch("hitsThr",         &hitsThr_);
+  treeEle->Branch("hitsEta",         &hitsEta_);
+  treeEle->Branch("hitsPhi",         &hitsPhi_);
+
   treeEle->Branch("nsamples",         &nsamples_);
   treeEle->Branch("e5x5",         &e5x5_);
   treeEle->Branch("genPt",         &genPt_);
@@ -534,14 +555,17 @@ ECALTimeSampleAnalyser::fillDescriptions(edm::ConfigurationDescriptions& descrip
 }
 
 
-std::vector<std::vector<double>> ECALTimeSampleAnalyser::getTimeSamplesAroundEle(std::vector<DetId> v_id, 
+std::vector<std::vector<double>> ECALTimeSampleAnalyser::getTimeSamplesAroundEle(
+										 const CaloGeometry* geo,					 std::vector<DetId> v_id, 
 										 edm::Handle<EBDigiCollection> pEBDigi, 
 										 edm::Handle<EEDigiCollection> pEEDigi, 
 										 const EcalRecHitCollection* EBRecHits, 
 										 const EcalRecHitCollection* EERecHits, 
 										 const EcalPFRecHitThresholds* thresholds,
 										 std::vector<double> &hitsEnergy,
-										 std::vector<double> &hitsThr){
+										 std::vector<double> &hitsThr,
+										 std::vector<double> &hitsEta,
+										 std::vector<double> &hitsPhi){
   
   //// follow ecalmultifit algo as linked in teh analyse function above and do the pedestal subtraction. link also given below
   ///https://cmssdt.cern.ch/lxr/source/RecoLocalCalo/EcalRecAlgos/src/EcalUncalibRecHitMultiFitAlgo.cc#0064
@@ -572,6 +596,10 @@ std::vector<std::vector<double>> ECALTimeSampleAnalyser::getTimeSamplesAroundEle
       
       double rechitEn = -99;
       
+      double rheta = -99;
+      double rhphi = -99;
+	
+
       if(isBarrel){
 	
 	//https://cmssdt.cern.ch/lxr/source/CaloOnlineTools/EcalTools/plugins/EcalCosmicsHists.cc#
@@ -590,7 +618,12 @@ std::vector<std::vector<double>> ECALTimeSampleAnalyser::getTimeSamplesAroundEle
 	  rechitEn =  0;
 	}
 	
-	
+	///eta phi
+	EBDetId det = it->id();
+	const GlobalPoint & rechitPoint = geo->getPosition(det);
+	rheta = rechitPoint.eta();
+	rhphi = rechitPoint.phi();
+      
 	unsigned int hashedIndex = EBDetId(id).hashedIndex();
 	aped = &peds->barrel(hashedIndex);
 	aGain = &gains->barrel(hashedIndex);
@@ -659,6 +692,12 @@ std::vector<std::vector<double>> ECALTimeSampleAnalyser::getTimeSamplesAroundEle
 	} else {
 	  rechitEn =  0;
 	}
+
+	///eta phi
+	EEDetId det = it->id();
+	const GlobalPoint & rechitPoint = geo->getPosition(det);
+	rheta = rechitPoint.eta();
+	rhphi = rechitPoint.phi();
 	
 	unsigned int hashedIndex = EEDetId(id).hashedIndex();
 	aped = &peds->endcap(hashedIndex);
@@ -707,6 +746,8 @@ std::vector<std::vector<double>> ECALTimeSampleAnalyser::getTimeSamplesAroundEle
 	}//else when the id is found
       }//if(!isBarrel)
       hitsEnergy.push_back(rechitEn);
+      hitsEta.push_back(rheta);
+      hitsPhi.push_back(rhphi);
     }//for (const auto& id : v_id)
     
     return hitTimeSamples;
