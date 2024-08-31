@@ -11,6 +11,8 @@
 <use name="CommonTools/UtilAlgos"/>
 <use name="FWCore/ServiceRegistry"/>
 <use name="DataFormats/HepMCCandidate"/>
+<use   name="Geometry/CaloGeometry"/>
+<use   name="SimDataFormats/CaloHit"/>
 <use name="rootcore"/>
 <flags LCG_DICT_XML="classes_def.xml"/>
 <export>
