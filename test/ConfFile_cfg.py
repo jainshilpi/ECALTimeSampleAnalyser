@@ -31,8 +31,8 @@ process.GlobalTag = GlobalTag(process.GlobalTag, '122X_mcRun3_2021_realistic_v9'
 
 #process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(5000) )
 #process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(500) )
-#process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(50) )
-process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(10) )
+process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(50) )
+#process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(10) )
 
 #
 
@@ -210,4 +210,4 @@ process.p = cms.Path(
 #process.e = cms.EndPath(process.InterimOutput)  
 
 
-print(process.dumpPython())
+#print(process.dumpPython())

@@ -49,6 +49,8 @@ config.Data.useParent                   = True
 #config.Data.inputDataset   = '/DoubleElectron_FlatPt-1To300/RunIIWinter19PFCalibDR-2018ConditionsFlatPU0to70ECALGT_105X_upgrade2018_realistic_IdealEcalIC_v4-v1/AODSIM'
 #config.Data.inputDataset   = '/DoubleElectron_FlatPt-1To300/Run3Winter20DRMiniAOD-FlatPU0to80_110X_mcRun3_2021_realistic_v6-v3/AODSIM'
 #config.Data.inputDataset   = '/DoubleElectron_FlatPt-1To300/Run3Winter20DRMiniAOD-FlatPU0to80_110X_mcRun3_2021_realistic_v6-v3/GEN-SIM-RAW'
+config.Data.inputDataset   = '/DYJetsToLL_M-50_TuneCP5_13p6TeV-madgraphMLM-pythia8/Run3Winter22DRPremix-EcalUncalZElectron-ALCARECO_122X_mcRun3_2021_realistic_v9_ext1-v3/ALCARECO'
+config.Data.outLFNDirBase  = '/store/user/shilpi/ECAL_EM_noise/with5x5/'
 
 ### used 
 #config.Data.inputDataset   = '/DYJetsToLL_M-50_TuneCP5_13p6TeV-madgraphMLM-pythia8/Run3Winter22DRPremix-EcalUncalZElectron-ALCARECO_122X_mcRun3_2021_realistic_v9_ext1-v3/ALCARECO'
@@ -58,10 +60,13 @@ config.Data.useParent                   = True
 
 ### to initiate the data transfer - 11th Dec, 2023
 #config.Data.inputDataset   = '/DYJetsToLL_M-50_TuneCP5_13p6TeV-madgraphMLM-pythia8/Run3Winter22DRPremix-ALCARECO_122X_mcRun3_2021_realistic_v9_ext1-v3/GEN-SIM-RAW'
+
+'''
+config.JobType.psetName     = 'ConfFile_cfg_minBias.py'
 #config.Data.inputDataset   = '/MinBias_TuneCP5_13p6TeV-pythia8/Run3Winter22DR-TkAlMinBias-PUForTRKAPE_TRK_122X_mcRun3_2021_design_v9-v2/ALCARECO'
 config.Data.inputDataset   = '/MinBias_TuneCP5_13p6TeV-pythia8/Run3Winter22DR-PUForTRKAPE_TRK_122X_mcRun3_2021_design_v9-v2/GEN-SIM-RAW'
  
 #config.Data.outLFNDirBase  = '/store/user/shilpi' ### first version here
 config.Data.outLFNDirBase  = '/store/user/shilpi/ECAL_EM_noise/with5x5/'
 #submit(config)
-
+'''

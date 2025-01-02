@@ -84,6 +84,7 @@ class ECALTimeSampleAnalyser : public edm::one::EDAnalyzer<edm::one::SharedResou
    private:
       static const int NMAXSAMPLES = 10;
       static const int NMAXCRYS = 100;
+  static const int n_neigh = 2; ///=1 for 3x3 and =2 for 5x5
       virtual void beginJob() override;
       virtual void analyze(const edm::Event&, const edm::EventSetup&) override;
       virtual void endJob() override;
@@ -122,7 +123,8 @@ class ECALTimeSampleAnalyser : public edm::one::EDAnalyzer<edm::one::SharedResou
   //const std::string ebdigiProducer_;
 
   bool runMinBias_;
-  bool debugL1_ = true;
+  //bool debugL1_ = true;
+  bool debugL1_ = false;
   
   TTree   *treeEle;
   TTree   *treePho;
@@ -142,10 +144,9 @@ class ECALTimeSampleAnalyser : public edm::one::EDAnalyzer<edm::one::SharedResou
   std::vector<double> hitsThr_;
   std::vector<double> hitsEta_;
   std::vector<double> hitsPhi_;
-  std::vector<int> hitsIsSimMatch_;
   std::vector<double> hitsSimEnEB_;
   std::vector<double> hitsSimEnEE_;
-
+  std::vector<int> hitsIsSimMatch_;
 
   ///hits noise
   std::vector<std::vector<double>> hitsNoiseEBAmplitudes_;
@@ -153,14 +154,17 @@ class ECALTimeSampleAnalyser : public edm::one::EDAnalyzer<edm::one::SharedResou
   std::vector<double> hitsNoiseEBThr_;
   std::vector<double> hitsNoiseEBEta_;
   std::vector<double> hitsNoiseEBPhi_;
+  std::vector<int> hitsNoiseEBIsSimMatch_;
 
+  
   std::vector<std::vector<double>> hitsNoiseEEAmplitudes_;
   std::vector<double> hitsNoiseEEEnergy_;
   std::vector<double> hitsNoiseEEThr_;
   std::vector<double> hitsNoiseEEEta_;
   std::vector<double> hitsNoiseEEPhi_;
 
-
+  std::vector<int> hitsNoiseEEIsSimMatch_;
+  
   edm::EDGetTokenT<std::vector<reco::GenParticle> > genParticlesCollection_;
 
 
@@ -240,22 +244,24 @@ ECALTimeSampleAnalyser::analyze(const edm::Event& iEvent, const edm::EventSetup&
    hitsThr_.clear();
    hitsEta_.clear();
    hitsPhi_.clear();
-   hitsIsSimMatch_.clear();
    hitsSimEnEB_.clear();
    hitsSimEnEE_.clear();
-
+   hitsIsSimMatch_.clear();
+   
    hitsNoiseEBAmplitudes_.clear();
    hitsNoiseEBEnergy_.clear();
    hitsNoiseEBThr_.clear();
    hitsNoiseEBEta_.clear();
    hitsNoiseEBPhi_.clear();
+   hitsNoiseEBIsSimMatch_.clear();
 
+   
    hitsNoiseEEAmplitudes_.clear();
    hitsNoiseEEEnergy_.clear();
    hitsNoiseEEThr_.clear();
    hitsNoiseEEEta_.clear();
    hitsNoiseEEPhi_.clear();
-
+   hitsNoiseEEIsSimMatch_.clear();
    
   // get geometry
   const CaloGeometry* geo = &iSetup.getData(geometryToken_);
@@ -348,6 +354,7 @@ ECALTimeSampleAnalyser::analyze(const edm::Event& iEvent, const edm::EventSetup&
    
      std::vector<std::vector<reco::GenParticle>::const_iterator> genLep;
 
+
      
      for (std::vector<reco::GenParticle>::const_iterator ip = genParticlesHandle->begin(); ip != genParticlesHandle->end(); ++ip) {
      
@@ -413,10 +420,15 @@ ECALTimeSampleAnalyser::analyze(const edm::Event& iEvent, const edm::EventSetup&
 	   //std::vector<DetId> v_id = noZS::EcalClusterTools::matrixDetId(caloTopology_.product(), seedDetId, 3);
 	   
 	   //// store 5x5 only
-	   std::vector<DetId> v_id = noZS::EcalClusterTools::matrixDetId(caloTopology_.product(), seedDetId, 2);
+	   std::vector<DetId> v_id = noZS::EcalClusterTools::matrixDetId(caloTopology_.product(), seedDetId, n_neigh);
+
+
+	   ///store 3x3 ---> 16th Nov, 2024
+	   //std::vector<DetId> v_id = noZS::EcalClusterTools::matrixDetId(caloTopology_.product(), seedDetId, 1);
 	   
 	   nCrys_ = (int) v_id.size();
-	   
+	 
+	   int nMatchSimHit = 0;
 	   ////match each crystal with simHit
 	   for (const auto& id : v_id) {
 	     
@@ -426,15 +438,19 @@ ECALTimeSampleAnalyser::analyze(const edm::Event& iEvent, const edm::EventSetup&
 	     hitsIsSimMatch_.push_back(isMatch);
 	     hitsSimEnEB_.push_back(matchSimEnergyEB);
 	     hitsSimEnEE_.push_back(matchSimEnergyEE);
+
+	     nMatchSimHit++;
 	   }
-	   
+
+	   if(debugL1_) std::cout<<"Matched simhits for ele "<<nMatchSimHit<<std::endl;
 	   ////end of match each crystal with simHit
 	   
 	   std::vector<double> hitsEnergy;
 	   std::vector<double> hitsThr;
 	   std::vector<double> hitsEta;
 	   std::vector<double> hitsPhi;
-	   
+
+	   if(debugL1_) std::cout<<"Calling getTimeSamples for ELectron"<<std::endl;
 	   std::vector<std::vector<double>> hitsAmplitudes = getTimeSamplesAroundEle(geo, v_id, pEBDigi, pEEDigi, EBRecHits, EERecHits, thresholds, hitsEnergy, hitsThr, hitsEta, hitsPhi);
 	     hitsAmplitudes_ = hitsAmplitudes;
 	     hitsEnergy_ = hitsEnergy;
@@ -493,6 +509,8 @@ ECALTimeSampleAnalyser::analyze(const edm::Event& iEvent, const edm::EventSetup&
      }
      
      for (uint j = 0; j < EBRecHits->size(); j++) {
+
+       hitsNoiseEBIsSimMatch_.clear();
        
        DetId id = (*EBRecHits)[j].id();
 
@@ -510,6 +528,18 @@ ECALTimeSampleAnalyser::analyze(const edm::Event& iEvent, const edm::EventSetup&
 
        if(fabs(rheta) > 1.4) continue; ///not taking border hits
        bool foundNoiseHit = true;
+
+       ///if found a match in the simhit collection, then move ahead - all the gen level particles leave hit in the simhit collection. But sources like PU and noise dont
+       
+       double matchSimEnergyEB = -99, matchSimEnergyEE = -99;
+       bool isMatch = getSimHitMatch(id, pEBSim, pEESim, matchSimEnergyEB, matchSimEnergyEE);
+
+       if(isMatch) continue;
+
+
+       if(debugL1_) std::cout<<"ID and energy of this seed noise rechit "<<id.rawId()<<" "<<en<<std::endl;
+       
+       /*
        for(uint k = 0; k < seedIDvec.size(); k++){
 	 
 	 const GlobalPoint & seedPoint = geo->getPosition(seedIDvec[k]);
@@ -536,17 +566,69 @@ ECALTimeSampleAnalyser::analyze(const edm::Event& iEvent, const edm::EventSetup&
 	 }//if( dEta<3.14 || dPhi>3 )
        }//for(uint k = 0; k < seedIDvec.size(); k++)
 
+       
        if(debugL1_){
 	 std::cout<<"FoundHit "<<foundNoiseHit<<std::endl;
        }
 
        if(foundNoiseHit==false) continue;
+       */
+       
        ///now for this rechit, get 7x7 rechits around it
        //v_id_EB = noZS::EcalClusterTools::matrixDetId(caloTopology_.product(), id, 3);
 
        ///store 5x5 
-       v_id_EB = noZS::EcalClusterTools::matrixDetId(caloTopology_.product(), id, 2);
+       v_id_EB = noZS::EcalClusterTools::matrixDetId(caloTopology_.product(), id, n_neigh);
 
+       ///store 3x3 ---> 16th Nov, 2024
+       //v_id_EB = noZS::EcalClusterTools::matrixDetId(caloTopology_.product(), id, 1);
+
+       int nCrysE0 = 0;
+       int nMatchSim = 0;
+       if(debugL1_) std::cout<<"Total size of rechits around this noisy xtal "<<v_id_EB.size()<<std::endl;
+	 for (const auto& ids : v_id_EB) {
+	 bool isMatch = getSimHitMatch(ids, pEBSim, pEESim, matchSimEnergyEB, matchSimEnergyEE);
+	 
+	 ///get the energy of this one
+	 EcalRecHitCollection::const_iterator it = EBRecHits->find(ids);
+	 double en = 0;
+	 if(it != EBRecHits->end()){
+	   if(debugL1_) std::cout<<"Found the rechit in EB around the seed one"<<std::endl;
+	   en = it->energy();
+	 }
+
+	 if(debugL1_) std::cout<<"ID of this hit around the noisy hit is "<<ids.det()<<" and raw ID is "<<ids.rawId()<<" and energy is "<<en<<std::endl;
+
+		 
+	 if(en<=0){
+	   nCrysE0++;
+	 }
+	 
+	 ///This noisy hit can be a neighbour of the real electron hits. So those noisy hits should be considered. 
+	 
+	 if(isMatch){
+	   //foundNoiseHit = false;
+	   //break;
+	   nMatchSim++;
+	   //continue;
+	 }
+
+	 hitsNoiseEBIsSimMatch_.push_back(isMatch);
+	 }
+       
+       
+       if(nCrysE0 > 12){
+	 if(debugL1_) std::cout<<"Around the noisy crystal, found "<<nCrysE0<<" crystals with energy = 0, so not storing"<<std::endl;
+	 continue;
+       }
+
+       if(nMatchSim > 12){
+	 if(debugL1_) std::cout<<"Around the noisy crystal, found "<<nMatchSim<<" crystals with SimHit match, so not storing"<<std::endl;
+	 continue;
+       }
+
+       //if(foundNoiseHit==false) continue;
+       
        if(debugL1_){
 
 	 std::cout<<"size of 7x7 crystals around this noisy crystal "<<v_id_EB.size()<<std::endl;
@@ -556,29 +638,36 @@ ECALTimeSampleAnalyser::analyze(const edm::Event& iEvent, const edm::EventSetup&
        std::vector<double> hitsThr;
        std::vector<double> hitsEta;
        std::vector<double> hitsPhi;
-       
+
+       if(debugL1_) std::cout<<"===========Calling getTimeSamplesAroundEle for this 5x5 array of noisy xtal============="<<std::endl;
        std::vector<std::vector<double>> hitsAmplitudes = getTimeSamplesAroundEle(geo, v_id_EB, pEBDigi, pEEDigi, EBRecHits, EERecHits, thresholds, hitsEnergy, hitsThr, hitsEta, hitsPhi);
        hitsNoiseEBAmplitudes_ = hitsAmplitudes;
        hitsNoiseEBEnergy_ = hitsEnergy;
        hitsNoiseEBThr_ = hitsThr;
        hitsNoiseEBEta_ = hitsEta;
        hitsNoiseEBPhi_ = hitsPhi;
+     
 
        ///print what is inside the hitsNoiseEBAmplitudes_
-       int icrys = 0;
-       int isample = 0;
-       for (const auto& array : hitsNoiseEBAmplitudes_) {
-	 isample = 0;
-	 for (const auto& element : array) {
-
-	   std::cout<<"Conent of hitsNoiseEBAmplitudes_["<<icrys<<"]["<<isample<<"] is "<<hitsNoiseEBAmplitudes_[icrys][isample]<<std::endl;
-	   
-	   isample++;
+       if(debugL1_){
+	 int icrys = 0;
+	 int isample = 0;
+	 for (const auto& array : hitsNoiseEBAmplitudes_) {
+	   if(debugL1_) std::cout<<"====This noise hit energy "<<hitsNoiseEBEnergy_[icrys]<<std::endl;
+	   isample = 0;
+	   for (const auto& element : array) {
+	     
+	     
+	     if(debugL1_) std::cout<<"Conent of hitsNoiseEBAmplitudes_["<<icrys<<"]["<<isample<<"] is "<<hitsNoiseEBAmplitudes_[icrys][isample]<<std::endl;
+	     
+	     isample++;
+	   }
+	   icrys++;
 	 }
-	 icrys++;
+	 ///print what is inside the hitsNoiseEBAmplitudes_
        }
-       ///print what is inside the hitsNoiseEBAmplitudes_
 
+       //std::cout<<"At this point, size of hitsNoiseEBIsSimMatch_ "<<hitsNoiseEBIsSimMatch_.size()<<" hitsNoiseEBEnergy_ "<<hitsNoiseEBEnergy_.size()<<std::endl;
        treeNoiseEB->Fill();
        
      }//for (uint j = 0; j < EBRecHits.size(); j++)
@@ -588,6 +677,7 @@ ECALTimeSampleAnalyser::analyze(const edm::Event& iEvent, const edm::EventSetup&
    /// EE rechit collection
    if (endcapRecHitsHandle.isValid()) {
 
+     hitsNoiseEEIsSimMatch_.clear();
      std::vector<DetId> v_id_EE;
      
      for (uint j = 0; j < EERecHits->size(); j++) {
@@ -607,6 +697,13 @@ ECALTimeSampleAnalyser::analyze(const edm::Event& iEvent, const edm::EventSetup&
 
        if(fabs(rheta) < 1.56 || fabs(rheta) > 2.4 ) continue; ///not taking border hits
        bool foundNoiseHit = true;
+
+       double matchSimEnergyEB = -99, matchSimEnergyEE = -99;
+       bool isMatch = getSimHitMatch(id, pEBSim, pEESim, matchSimEnergyEB, matchSimEnergyEE);
+
+       if(isMatch) continue;
+
+       /*
        for(uint k = 0; k < seedIDvec.size(); k++){
 	 
 	 const GlobalPoint & seedPoint = geo->getPosition(seedIDvec[k]);
@@ -624,16 +721,61 @@ ECALTimeSampleAnalyser::analyze(const edm::Event& iEvent, const edm::EventSetup&
        }//for(uint k = 0; k < seedIDvec.size(); k++)
 
        if(foundNoiseHit==false) continue;
+       */
+       
        ///now for this rechit, get 7x7 rechits around it
        //v_id_EE = noZS::EcalClusterTools::matrixDetId(caloTopology_.product(), id, 3);
 
        /// store 5x5 only
-       v_id_EE = noZS::EcalClusterTools::matrixDetId(caloTopology_.product(), id, 2);
+       v_id_EE = noZS::EcalClusterTools::matrixDetId(caloTopology_.product(), id, n_neigh);
+
+
+       int nCrysE0 = 0;
+       int nMatchSim = 0;
+       for (const auto& id : v_id_EE) {
+	 bool isMatch = getSimHitMatch(id, pEBSim, pEESim, matchSimEnergyEB, matchSimEnergyEE);
+	 
+	 ///get the energy of this one
+	 EcalRecHitCollection::const_iterator it = EERecHits->find(id);
+	 double en = 0;
+	 if(it != EERecHits->end()){
+	   en = it->energy();
+	 }
+
+	 if(en<=0){
+	   nCrysE0++;
+	 }
+	 
+	 ///This noisy hit can be a neighbour of the real electron hits. So those noisy hits should be considered. 
+	 
+	 if(isMatch){
+	   //foundNoiseHit = false;
+	   //break;
+	   nMatchSim++;
+	   //continue;
+	 }
+	 
+	 hitsNoiseEEIsSimMatch_.push_back(isMatch);
+       }//for (const auto& id : v_id_EE)
+       
+       
+       if(nCrysE0 > 12){
+	 if(debugL1_) std::cout<<"Around the noisy crystal for EE, found "<<nCrysE0<<" crystals with energy = 0, so not storing"<<std::endl;
+	 continue;
+       }
+
+       if(nMatchSim > 12){
+	 if(debugL1_) std::cout<<"Around the noisy crystal for EE, found "<<nMatchSim<<" crystals with SimHit match, so not storing"<<std::endl;
+	 continue;
+       }
+
        
        std::vector<double> hitsEnergy;
        std::vector<double> hitsThr;
        std::vector<double> hitsEta;
        std::vector<double> hitsPhi;
+
+       if(debugL1_) std::cout<<"Calling getTimeSamples for noisy EE"<<std::endl;
        
        std::vector<std::vector<double>> hitsAmplitudes = getTimeSamplesAroundEle(geo, v_id_EE, pEBDigi, pEEDigi, EBRecHits, EERecHits, thresholds, hitsEnergy, hitsThr, hitsEta, hitsPhi);
        hitsNoiseEEAmplitudes_ = hitsAmplitudes;
@@ -805,6 +947,8 @@ ECALTimeSampleAnalyser::beginJob()
   treeNoiseEB->Branch("hitsNoiseEBEta",         &hitsNoiseEBEta_);
   treeNoiseEB->Branch("hitsNoiseEBPhi",         &hitsNoiseEBPhi_);
 
+  treeNoiseEB->Branch("hitsNoiseEBIsSimMatch",        &hitsNoiseEBIsSimMatch_);
+
   treeNoiseEE    = fs->make<TTree>("EventTreeNoiseEE", "Event data");
   treeNoiseEE->Branch("hitsNoiseEEAmplitudes",         &hitsNoiseEEAmplitudes_);
   treeNoiseEE->Branch("hitsNoiseEEEnergy",         &hitsNoiseEEEnergy_);
@@ -812,7 +956,8 @@ ECALTimeSampleAnalyser::beginJob()
   treeNoiseEE->Branch("hitsNoiseEEEta",         &hitsNoiseEEEta_);
   treeNoiseEE->Branch("hitsNoiseEEPhi",         &hitsNoiseEEPhi_);
 
-
+  treeNoiseEE->Branch("hitsNoiseEEIsSimMatch",        &hitsNoiseEEIsSimMatch_);
+  
 }
 
 // ------------ method called once each job just after ending the event loop  ------------
